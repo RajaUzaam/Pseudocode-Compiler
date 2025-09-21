@@ -9,7 +9,6 @@
 #define OPSIZE 32
 
 // Lexer
-
 bool check(char* str, const char* arr[], int size) {
     for (int i = 0; i < size; i++) {
         if (strcmp(str, arr[i]) == 0) {
@@ -128,6 +127,8 @@ void parse(char* str) {
 }
 
 // AST
+//=======================
+// Types
 typedef enum {
     NODE_PROGRAM,
     NODE_VAR_DECL,
@@ -137,12 +138,90 @@ typedef enum {
     NODE_LITERAL
 } NodeType;
 
+typedef enum {
+    INT,
+    FLOAT,
+    CHAR
+} VarType;
+
+typedef enum {
+    ADD,
+    MUL,
+    SUB,
+    DIV
+} OpType;
+
+// AST Node
 typedef struct ASTNode{
     NodeType type;
 
-    char *name;
+    union {
+        char *name;
+        int value;
+        VarType var_type;
+        OpType op;
+    } data;
+
+    struct ASTNode **children;
+    int child_count;
 
 } ASTNode;
+
+// AST Helper Functions
+ASTNode *new_node(NodeType type) {
+    ASTNode *node = malloc(sizeof(ASTNode));
+    node->type = type;
+    node->children = NULL;
+    node->child_count = 0;
+    return node;
+}
+
+ASTNode *create_var_decl(VarType vtype, char *name) {
+    ASTNode *node = new_node(NODE_VAR_DECL);
+    node->data.var_type = vtype;
+
+    // variable name as a child IDENTIFIER node
+    node->children = malloc(sizeof(ASTNode*));
+    node->children[0] = create_identifier(name);
+    node->child_count = 1;
+
+    return node;
+}
+
+ASTNode *create_number(int value) {
+    ASTNode *node = new_node(NODE_VAR_DECL);
+    node->data.value = value;
+    return node;
+}
+
+ASTNode *create_identifier(char *name) {
+    ASTNode *node = new_node(NODE_IDENTIFIER);
+    node->data.name = strdup(name);
+    return node;
+}
+
+ASTNode *create_bin_op(OpType op, ASTNode *left, ASTNode *right) {
+    ASTNode *node = new_node(NODE_BINARY_OP);
+    node->data.op = op;
+
+    node->children = malloc(sizeof(ASTNode*) * 2);
+    node->children[0] = left;
+    node->children[1] = right;
+    node->child_count = 2;
+
+    return node;
+}
+
+ASTNode *create_assignment(ASTNode *id, ASTNode *expr) {
+    ASTNode *node = new_node(NODE_ASSIGN);
+
+    node->children = malloc(sizeof(ASTNode*) * 2);
+    node->children[0] = id;
+    node->children[1] = expr;
+    node->child_count = 2;
+
+    return node;
+}
 
 int main(void) {
     char str[100];
