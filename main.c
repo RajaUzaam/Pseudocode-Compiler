@@ -9,6 +9,29 @@
 #define OPSIZE 32
 
 // Lexer
+
+typedef enum {
+    TOK_DECLARE,
+    TOK_IDENTIFIER,
+    TOK_COLON,
+    TOK_INTEGER,
+    TOK_ASSIGN,
+    TOK_REAL,
+    TOK_PLUS,
+    TOK_MINUS,
+    TOK_STAR,
+    TOK_SLASH,
+    TOK_END,
+    TOK_EOF,
+    TOK_PAREN
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    char *lexeme;
+    int value;
+} Token;
+
 bool check(char* str, const char* arr[], int size) {
     for (int i = 0; i < size; i++) {
         if (strcmp(str, arr[i]) == 0) {
@@ -79,57 +102,39 @@ bool isReal(char* str) {
     else {return false;}
 }
 
-bool isSpecialSym(char* str) {
-    const char* specialSyms[] = {":", ";", "[", "]", "{", "}", "(", ")"};
-    return check(str, specialSyms, 8);
+bool isSpecialSym(char* str, TokenType* type) {
+    const char* specialSyms[] = {":", "<-", "(", ")"};
+    if (!check(str, specialSyms, 8)) {return false;}
+    if (!strcmp(str, ":")) {*type = TOK_COLON;}
+    else if (!strcmp(str, "<-")) {*type = TOK_ASSIGN;}
+    else if (!strcmp(str, "(") || !strcmp(str, ")")) {*type = TOK_PAREN;}
+    return true;
 }
 
-bool isKeyword(char* str) {
+bool isKeyword(char* str, TokenType* type) {
     const char* keywords[] = {"DECLARE", "INTEGER", "REAL", "STRING", "OUTPUT"};
-    return check(str, keywords, 5);
+    if (!check(str, keywords, 5)) {return false;}
+    if (!strcmp(str, "DECLARE")) {*type = TOK_DECLARE;}
+    if (!strcmp(str, "INTEGER")) {*type = TOK_INTEGER;}
+    if (!strcmp(str, "REAL")) {*type = TOK_REAL;}
+    return true;
 }
 
-bool isOper(char* str) {
-    const char* opers[] = {"+", "-", "*", "/", "<-"};
-    return check(str, opers, 5);
-}
-
-void parse(char* str) {
-    int left = 0, right = 0, len = strlen(str);
-    while (right <= len && left <= len) {
-        if (!isDelimiter(str[right])) {
-            right++;
-        }
-        else if (isDelimiter(str[right]) && left != right) {
-            char* substr = slice(str, left, right-1);
-            if (strcmp(substr, "//") == 0) {
-                return;
-            }
-            else if (isOper(substr)) {
-                printf("[%s] is an Operator\n", substr);
-            } else if (isKeyword(substr)) {
-                printf("[%s] is a Keyword\n", substr);
-            } else if (isSpecialSym(substr)) {
-                printf("[%s] is a Special Symbol\n", substr);
-            } else if (isIdentifier(substr)) {
-                printf("[%s] is an Identifier\n", substr);
-            } else if (isInt(substr)) {
-                printf("[%s] is an Integer\n", substr);
-            } else if (isReal(substr)) {
-                printf("[%s] is an Real\n", substr);
-            } else {
-                printf("[%s] Not Valid\n", substr);
-            }
-            free(substr);
-            left = ++right;
-        }
-    }
+bool isOper(char* str, TokenType* type) {
+    const char* opers[] = {"+", "-", "*", "/"};
+    if (!check(str, opers, 5)) {return false;}
+    if (!strcmp(str, "+")) {*type = TOK_PLUS;}
+    else if (!strcmp(str, "-")) {*type = TOK_MINUS;}
+    else if (!strcmp(str, "*")) {*type = TOK_STAR;}
+    else if (!strcmp(str, "/")) {*type = TOK_SLASH;}
+    return true;
 }
 
 // AST
 //=======================
 // Types
 typedef enum {
+    NODE_NUMBER,
     NODE_PROGRAM,
     NODE_VAR_DECL,
     NODE_ASSIGN,
@@ -176,6 +181,18 @@ ASTNode *new_node(NodeType type) {
     return node;
 }
 
+ASTNode *create_identifier(char *name) {
+    ASTNode *node = new_node(NODE_IDENTIFIER);
+    node->data.name = strdup(name);
+    return node;
+}
+
+ASTNode *create_number(int value) {
+    ASTNode *node = new_node(NODE_NUMBER);
+    node->data.value = value;
+    return node;
+}
+
 ASTNode *create_var_decl(VarType vtype, char *name) {
     ASTNode *node = new_node(NODE_VAR_DECL);
     node->data.var_type = vtype;
@@ -185,18 +202,6 @@ ASTNode *create_var_decl(VarType vtype, char *name) {
     node->children[0] = create_identifier(name);
     node->child_count = 1;
 
-    return node;
-}
-
-ASTNode *create_number(int value) {
-    ASTNode *node = new_node(NODE_VAR_DECL);
-    node->data.value = value;
-    return node;
-}
-
-ASTNode *create_identifier(char *name) {
-    ASTNode *node = new_node(NODE_IDENTIFIER);
-    node->data.name = strdup(name);
     return node;
 }
 
@@ -223,12 +228,86 @@ ASTNode *create_assignment(ASTNode *id, ASTNode *expr) {
     return node;
 }
 
+// Tokenizer
+int tokenize(char* str, Token* tokens, int max_tokens) {
+    TokenType type;
+    int left = 0, right = 0, i = 0, len = strlen(str);
+    while (right <= len && left <= len) {
+        if (!isDelimiter(str[right])) {
+            right++;
+        }
+        else if (isDelimiter(str[right]) && left != right) {
+            if (i >= max_tokens-1) {
+                printf("OverflowError!\n");
+                exit(1);
+            }
+            char* substr = slice(str, left, right-1);
+            if (strcmp(substr, "//") == 0) {
+                tokens[i].type = TOK_END;
+                tokens[i].lexeme = strdup(substr);
+                free(substr);
+                return i+1;
+            }
+            else if (isOper(substr, &type)) {
+                tokens[i].type = type;
+                tokens[i].lexeme = strdup(substr);
+            } else if (isKeyword(substr, &type)) {
+                tokens[i].type = type;
+                tokens[i].lexeme = strdup(substr);
+            } else if (isSpecialSym(substr, &type)) {
+                tokens[i].type = type;
+                tokens[i].lexeme = strdup(substr);
+            } else if (isIdentifier(substr)) {
+                tokens[i].type = TOK_IDENTIFIER;
+                tokens[i].lexeme = strdup(substr);
+            } else if (isReal(substr)) {
+                tokens[i].type = TOK_REAL;
+                tokens[i].value = atof(substr);
+                tokens[i].lexeme = strdup(substr);
+            } else if (isInt(substr)) {
+                tokens[i].type = TOK_INTEGER;
+                tokens[i].value = atoi(substr);
+                tokens[i].lexeme = strdup(substr);
+            } else {
+                printf("[%s] Not Valid\n", substr);
+                free(substr);
+                exit(1);
+            }
+            free(substr);
+            left = ++right;
+            i++;
+        }
+    }
+    tokens[i].type = TOK_END;
+    tokens[i].lexeme = strdup("END");
+    return i+1;
+}
+
+// AST Parser
+ASTNode* parse_exp(void) {
+
+}
+
+ASTNode* parse_decl(void) {
+
+}
+
+ASTNode* parse_assign(void) {
+
+}
+
+ASTNode* parse_statement(char* statement) {
+
+}
+
 int main(void) {
     char str[100];
     FILE* file;
+    ASTNode* program = new_node(NODE_PROGRAM);
     file = fopen("./main.pseu", "r");
     while (fgets(str, 100, file)) {
-        parse(str);
+        ASTNode* stmt = parse_statement(str);
+        
     }
     fclose(file);
     return 0;
