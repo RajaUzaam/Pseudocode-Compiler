@@ -9,7 +9,6 @@
 #define OPSIZE 32
 
 // Lexer
-
 typedef enum {
     TOK_DECLARE,
     TOK_IDENTIFIER,
@@ -25,6 +24,7 @@ typedef enum {
     TOK_SLASH,
     TOK_END,
     TOK_EOF,
+    TOK_OUTPUT,
     TOK_PAREN
 } TokenType;
 
@@ -116,6 +116,9 @@ bool isKeyword(char* str, TokenType* type) {
     if (!strcmp(str, "DECLARE")) {*type = TOK_DECLARE;}
     if (!strcmp(str, "INTEGER")) {*type = TOK_TYPE_INT;}
     if (!strcmp(str, "REAL")) {*type = TOK_REAL;}
+    if (!strcmp(str, "OUTPUT")) {
+        *type = TOK_OUTPUT;
+    }
     return true;
 }
 
@@ -137,6 +140,7 @@ typedef enum {
     NODE_PROGRAM,
     NODE_VAR_DECL,
     NODE_ASSIGN,
+    NODE_OUTPUT,
     NODE_BINARY_OP,
     NODE_IDENTIFIER,
     NODE_LITERAL
@@ -230,6 +234,14 @@ ASTNode *create_assignment(ASTNode *id, ASTNode *expr) {
     node->children[1] = expr;
     node->child_count = 2;
 
+    return node;
+}
+
+ASTNode *create_output(ASTNode *expr) {
+    ASTNode *node = new_node(NODE_OUTPUT);
+    node->children = malloc(sizeof(ASTNode*));
+    node->children[0] = expr;
+    node->child_count = 1;
     return node;
 }
 
@@ -403,6 +415,21 @@ ASTNode* parse_assign(void) {
     return create_assignment(id, expr);
 }
 
+ASTNode* parse_output(void) {
+    ASTNode* result;
+    if (matchTokens(TOK_INT) || matchTokens(TOK_REAL)) {
+        result = create_output(create_number(peekToken(0)->value));
+    } else if (matchTokens(TOK_IDENTIFIER)) {
+        result = create_output(create_identifier(peekToken(0)->lexeme));
+    } else {
+        printf("Invalid Ouput Error!\n");
+        exit(1);
+    }
+    nextToken();
+    checkToken(TOK_END);
+    return result;
+}
+
 void free_tokens(Token* tokens, int count) {
     for (int i = 0; i < count; i++) {
         if (tokens[i].lexeme != NULL) {
@@ -422,6 +449,9 @@ ASTNode* parse_statement(char* statement) {
         result = parse_decl();
     } else if (matchTokens(TOK_IDENTIFIER)) {
         result = parse_assign();
+    } else if (matchTokens(TOK_OUTPUT)) {
+        nextToken();
+        result = parse_output();
     } else if (matchTokens(TOK_END)) {
         return NULL;
     } else {
@@ -483,6 +513,11 @@ void print_ast(ASTNode* node, int indent) {
             for (int i = 0; i < node->child_count; i++) {
                 print_ast(node->children[i], indent + 1);
             }
+            break;
+
+        case NODE_OUTPUT:
+            printf("Output\n");
+            print_ast(node->children[0], indent+1);
             break;
 
         case NODE_BINARY_OP:
