@@ -1,0 +1,9 @@
+DECLARE Grade1 : INTEGER
+DECLARE Grade2 : INTEGER
+DECLARE Grade3 : INTEGER
+Grade1 <- 10
+Grade2 <- 100
+Grade3 <- 50
+totalGrades <- Grade1 Grade2 + Grade3 +
+averageGrades <- totalGrades 3 /
+OUTPUT averageGrades

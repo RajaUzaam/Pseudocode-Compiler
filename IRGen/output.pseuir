@@ -1,0 +1,12 @@
+Grade1
+Grade2
+Grade3
+Grade1 = 10
+Grade2 = 100
+Grade3 = 50
+t0 = Grade1 + Grade2
+t1 = t0 + Grade3
+totalGrades = t1
+t2 = totalGrades / 3
+averageGrades = t2
+output averageGrades

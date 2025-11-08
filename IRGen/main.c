@@ -185,8 +185,7 @@ ASTNode *new_node(NodeType type) {
 }
 
 void add_child(ASTNode* parent, ASTNode* child) {
-    parent->children = realloc(parent->children,
-                               sizeof(ASTNode*) * (parent->child_count + 1));
+    parent->children = realloc(parent->children, sizeof(ASTNode*) * (parent->child_count + 1));
     parent->children[parent->child_count++] = child;
 }
 
@@ -465,7 +464,7 @@ ASTNode* parse_statement(char* statement) {
 // FOR PRINTING PURPOSES ==============================================================
 void print_indent(int indent) {
     for (int i = 0; i < indent; i++) {
-        printf("  "); // 2 spaces
+        printf("  ");
     }
 }
 
@@ -500,50 +499,92 @@ void print_ast(ASTNode* node, int indent) {
                 print_ast(node->children[i], indent + 1);
             }
             break;
-
         case NODE_VAR_DECL:
             printf("VarDecl(type=%s)\n", vartype(node->data.var_type));
             for (int i = 0; i < node->child_count; i++) {
                 print_ast(node->children[i], indent + 1);
             }
             break;
-
         case NODE_ASSIGN:
             printf("Assign\n");
             for (int i = 0; i < node->child_count; i++) {
                 print_ast(node->children[i], indent + 1);
             }
             break;
-
         case NODE_OUTPUT:
             printf("Output\n");
             print_ast(node->children[0], indent+1);
             break;
-
         case NODE_BINARY_OP:
             printf("BinaryOp(%s)\n", opname(node->data.op));
             for (int i = 0; i < node->child_count; i++) {
                 print_ast(node->children[i], indent + 1);
             }
             break;
-
         case NODE_IDENTIFIER:
             printf("Identifier(%s)\n", node->data.name);
             break;
-
         case NODE_NUMBER:
             printf("Number(%d)\n", node->data.value);
             break;
-
         case NODE_LITERAL:
             printf("Literal(%s)\n", node->data.name);
             break;
-
         default:
             printf("UnknownNode\n");
+            break;
     }
 }
 //===============================================================================
+
+int tempVars = 0;
+
+char* new_temp() {
+    char* buf = malloc(10);
+    sprintf(buf, "t%d", tempVars++);
+    return buf;
+}
+
+char* construct_ir(ASTNode* node, FILE* ir_file) {
+    switch (node->type) {
+        case NODE_PROGRAM:
+            for (int i = 0; i < node->child_count; i++)
+                construct_ir(node->children[i], ir_file);
+            return NULL;
+
+        case NODE_VAR_DECL: {
+            ASTNode* id = node->children[0];
+            fprintf(ir_file, "%s\n", id->data.name);
+            return NULL;
+        }
+        case NODE_OUTPUT:
+            fprintf(ir_file, "output %s\n", construct_ir(node->children[0], ir_file));
+            return NULL;
+        case NODE_ASSIGN:
+            char* right = construct_ir(node->children[1], ir_file);
+            fprintf(ir_file, "%s = %s\n",node->children[0]->data.name, right);
+            return NULL;
+        case NODE_BINARY_OP: {
+            char* lhs = construct_ir(node->children[0], ir_file);
+            char* rhs = construct_ir(node->children[1], ir_file);
+            char* tmp = new_temp();
+            fprintf(ir_file, "%s = %s %s %s\n",tmp, lhs, opname(node->data.op), rhs);
+            return tmp; break;
+        }
+        case NODE_IDENTIFIER:
+            return node->data.name;
+        case NODE_NUMBER: {
+            char *tmp_num = malloc(10);
+            sprintf(tmp_num, "%d", node->data.value);
+            return tmp_num;
+        }
+        default:
+            printf("Error Generating IR!: Unrecognized Token Node");
+            exit(1);
+            break;
+    }
+}
+
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -567,7 +608,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    FILE* ir_file = fopen(argv[2], "w");
+    construct_ir(program, ir_file);
+    fclose(ir_file);
+
     fclose(file);
-    print_ast(program, 0);
+    //print_ast(program, 0);
     return 0;
 }
